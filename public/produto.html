@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Detalhe do Produto</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+body { font-family: 'Poppins', sans-serif; margin:0; padding:0; background:#fffaf5; color:#222; }
+header { background:#651616; color:#fff; padding:12px 20px; display:flex; align-items:center; }
+header a { color:#fff; text-decoration:none; margin-left:20px; font-weight:600; }
+.container { max-width:900px; margin:100px auto 50px; padding:16px; display:flex; gap:24px; flex-wrap:wrap; }
+.produto-img { flex:1; min-width:280px; }
+.produto-img img { width:100%; border-radius:12px; object-fit:cover; }
+.produto-info { flex:1; min-width:280px; display:flex; flex-direction:column; gap:12px; }
+.produto-info h2 { color:#651616; margin:0; }
+.produto-info p { color:#555; }
+.produto-info .preco { color:#f5c144; font-weight:700; font-size:1.3rem; }
+.produto-info .quantidade-box { display:flex; gap:6px; align-items:center; margin-top:6px; }
+.produto-info .quantidade-box button { width:28px; height:28px; border:none; border-radius:6px; background:#651616; color:#fff; font-weight:700; cursor:pointer; }
+.produto-info .quantidade-box input { width:50px; text-align:center; border-radius:6px; border:1px solid #ccc; padding:4px; }
+.produto-info button.add-btn { margin-top:12px; padding:12px; border-radius:8px; border:none; background:#651616; color:#fff; font-weight:700; cursor:pointer; }
+.produto-info button.add-btn:hover { background:#f5c144; color:#651616; }
+</style>
+</head>
+<body>
+<header>
+  <div>ChupChup <span style="color:#f5c144">Cremosão</span></div>
+  <a href="index.html">Voltar</a>
+</header>
+
+<div class="container">
+  <div class="produto-img">
+    <img id="imgProduto" src="" alt="Produto">
+  </div>
+  <div class="produto-info">
+    <h2 id="nomeProduto"></h2>
+    <p id="descricaoProduto"></p>
+    <div class="preco" id="precoProduto"></div>
+    <div class="quantidade-box">
+      <button id="menosBtn">-</button>
+      <input type="number" id="qtdProduto" value="1" min="1">
+      <button id="maisBtn">+</button>
+    </div>
+    <button class="add-btn" id="adicionarProduto">Adicionar ao carrinho</button>
+  </div>
+</div>
+
+<script>
+const params = new URLSearchParams(window.location.search);
+const idProduto = params.get("id");
+
+let produtoAtual = null;
+
+async function carregarProduto() {
+  try {
+    const res = await fetch("http://localhost:3000/api/produtos");
+    const produtos = await res.json();
+    produtoAtual = produtos.find(p => p.id == idProduto);
+    if(!produtoAtual) {
+      alert("Produto não encontrado!");
+      window.location.href = "index.html";
+      return;
+    }
+
+    document.getElementById("imgProduto").src = produtoAtual.imagem;
+    document.getElementById("nomeProduto").textContent = produtoAtual.nome;
+    document.getElementById("descricaoProduto").textContent = produtoAtual.descricao || "";
+    document.getElementById("precoProduto").textContent = "R$ " + parseFloat(produtoAtual.preco).toFixed(2);
+  } catch(e) {
+    console.error("Erro ao carregar produto:", e);
+  }
+}
+
+carregarProduto();
+
+// Quantidade
+document.getElementById("maisBtn").onclick = () => {
+  const input = document.getElementById("qtdProduto");
+  input.value = parseInt(input.value) + 1;
+};
+document.getElementById("menosBtn").onclick = () => {
+  const input = document.getElementById("qtdProduto");
+  input.value = Math.max(1, parseInt(input.value) - 1);
+};
+
+// Carrinho
+let carrinho = JSON.parse(localStorage.getItem("carrinho")) || [];
+
+document.getElementById("adicionarProduto").onclick = () => {
+  const qtd = parseInt(document.getElementById("qtdProduto").value);
+  const existente = carrinho.find(p => p.id == produtoAtual.id);
+  if(existente) existente.qtd += qtd;
+  else carrinho.push({...produtoAtual, qtd});
+  localStorage.setItem("carrinho", JSON.stringify(carrinho));
+  alert("Produto adicionado ao carrinho!");
+};
+</script>
+
+</body>
+</html>
