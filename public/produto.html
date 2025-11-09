@@ -47,54 +47,176 @@ header a { color:#fff; text-decoration:none; margin-left:20px; font-weight:600; 
 </div>
 
 <script>
-const params = new URLSearchParams(window.location.search);
-const idProduto = params.get("id");
+document.addEventListener("DOMContentLoaded", async () => {
+  const lista = document.getElementById("listaProdutos") || (() => {
+    const div = document.createElement("div");
+    div.id = "listaProdutos";
+    document.querySelector("main").appendChild(div);
+    return div;
+  })();
+  const contadorCarrinho = document.getElementById("contador-carrinho");
+  const carrinhoFixo = document.getElementById("carrinho-fixo");
+  const totalCarrinhoSpan = document.getElementById("totalCarrinho");
+  const itensCarrinhoDrawer = document.getElementById("itensCarrinhoDrawer");
+  const resumoDrawer = document.getElementById("resumoDrawer");
+  const carrinhoDrawer = document.getElementById("carrinho-drawer");
+  const popupFinalizar = document.getElementById("finalizar-popup");
+  const campoTroco = document.getElementById("campo-troco");
+  const selPagamento = document.getElementById("sel-pagamento");
+  const perfilPopup = document.getElementById("perfil-popup");
 
-let produtoAtual = null;
+  const nomePerfilInput = document.getElementById("nomePerfilInput");
+  const bairroPerfilInput = document.getElementById("bairroPerfilInput");
+  const enderecoPerfilInput = document.getElementById("enderecoPerfilInput");
+  const referenciaPerfilInput = document.getElementById("referenciaPerfilInput");
 
-async function carregarProduto() {
-  try {
-    const res = await fetch("http://localhost:3000/api/produtos");
-    const produtos = await res.json();
-    produtoAtual = produtos.find(p => p.id == idProduto);
-    if(!produtoAtual) {
-      alert("Produto não encontrado!");
-      window.location.href = "index.html";
+  let produtos = [];
+  let carrinho = [];
+
+  async function carregarProdutos() {
+    lista.innerHTML = "<p>Carregando produtos...</p>";
+    try {
+      const res = await fetch("https://chupchupcremosao/api/produtos");
+      produtos = await res.json();
+
+      if(produtos.length === 0){
+        lista.innerHTML = "<p>Não há produtos disponíveis.</p>";
+        return;
+      }
+
+      lista.innerHTML = "";
+      produtos.forEach(p => {
+        const el = document.createElement("div");
+        el.className = "produto";
+        const imagemUrl = p.imagem.startsWith("http") ? p.imagem : `https://chupchupcremosao${p.imagem}`;
+        el.innerHTML = `
+          <img src="${imagemUrl}" alt="${p.nome}">
+          <h3>${p.nome}</h3>
+          <p>${p.descricao || ""}</p>
+          <div class="preco">R$ ${parseFloat(p.preco).toFixed(2)}</div>
+          <div class="quantidade-box">
+            <button onclick="menos(${p.id})">-</button>
+            <input type="number" id="qtd-${p.id}" value="1" min="1">
+            <button onclick="mais(${p.id})">+</button>
+          </div>
+          <button class="add-btn" onclick="adicionarCarrinho(${p.id})">Adicionar</button>
+        `;
+        lista.appendChild(el);
+      });
+    } catch(e) {
+      console.error("Erro ao carregar produtos:", e);
+      lista.innerHTML = "<p>Não foi possível carregar os produtos 😢</p>";
+    }
+  }
+
+  window.mais = (id) => {
+    const input = document.getElementById(`qtd-${id}`);
+    input.value = parseInt(input.value) + 1;
+  };
+
+  window.menos = (id) => {
+    const input = document.getElementById(`qtd-${id}`);
+    input.value = Math.max(1, parseInt(input.value) - 1);
+  };
+
+  window.adicionarCarrinho = (id) => {
+    const produto = produtos.find(p => p.id === id);
+    const qtd = parseInt(document.getElementById(`qtd-${id}`).value);
+    const existente = carrinho.find(i => i.id === id);
+    if (existente) existente.qtd += qtd;
+    else carrinho.push({ ...produto, qtd });
+    atualizarCarrinho();
+  };
+
+  window.removerCarrinho = (id) => {
+    carrinho = carrinho.filter(i => i.id !== id);
+    atualizarCarrinho();
+  };
+
+  function atualizarCarrinho() {
+    const total = carrinho.reduce((s, p) => s + p.preco * p.qtd, 0);
+    const qtdTotal = carrinho.reduce((s, p) => s + p.qtd, 0);
+
+    contadorCarrinho.textContent = qtdTotal;
+    totalCarrinhoSpan.textContent = total.toFixed(2);
+    carrinhoFixo.style.display = qtdTotal > 0 ? "flex" : "none";
+
+    itensCarrinhoDrawer.innerHTML = carrinho.map(p => `
+      <p>
+        ${p.qtd}x ${p.nome} — R$ ${(p.qtd * p.preco).toFixed(2)}
+        <button style="margin-left:8px;background:#f5c144;border:none;padding:4px 8px;border-radius:6px;cursor:pointer"
+          onclick="removerCarrinho(${p.id})">Remover</button>
+      </p>
+    `).join("");
+
+    resumoDrawer.innerHTML = `<b>Total:</b> R$ ${total.toFixed(2)}`;
+  }
+
+  const usuario = JSON.parse(localStorage.getItem("usuario")) || {};
+  nomePerfilInput.value = usuario.nome || "";
+  bairroPerfilInput.value = usuario.bairro || "";
+  enderecoPerfilInput.value = usuario.rua || "";
+  referenciaPerfilInput.value = usuario.referencia || "";
+
+  window.abrirPerfil = () => { perfilPopup.style.display = "flex"; };
+  window.fecharPerfil = () => { perfilPopup.style.display = "none"; };
+
+  document.getElementById("salvarPerfil").onclick = () => {
+    usuario.nome = nomePerfilInput.value;
+    usuario.bairro = bairroPerfilInput.value;
+    usuario.rua = enderecoPerfilInput.value;
+    usuario.referencia = referenciaPerfilInput.value;
+    localStorage.setItem("usuario", JSON.stringify(usuario));
+    alert("Perfil salvo!");
+    fecharPerfil();
+  };
+
+  document.getElementById("abrir-carrinho").onclick = () => carrinhoDrawer.classList.add("ativo");
+  document.getElementById("fechar-carrinho").onclick = () => carrinhoDrawer.classList.remove("ativo");
+  document.getElementById("abrir-finalizar").onclick = () => abrirFinalizar();
+
+  selPagamento.addEventListener("change", () => {
+    campoTroco.style.display = selPagamento.value === "dinheiro" ? "block" : "none";
+  });
+
+  function abrirFinalizar() {
+    if (carrinho.length === 0) {
+      alert("Seu carrinho está vazio!");
+      return;
+    }
+    popupFinalizar.style.display = "flex";
+  }
+
+  document.getElementById("btn-cancelar-popup").onclick = () => popupFinalizar.style.display = "none";
+
+  document.getElementById("btn-confirmar-popup").onclick = () => {
+    const tipoEntrega = document.querySelector("input[name='tipoEntrega']:checked").value;
+    const pagamento = selPagamento.value;
+    const troco = document.getElementById("input-troco").value;
+
+    const qtdTotal = carrinho.reduce((s, p) => s + p.qtd, 0);
+    if (qtdTotal < 3 && tipoEntrega === "entrega") {
+      alert("Pedido mínimo para entrega é de 3 chupchups!");
       return;
     }
 
-    document.getElementById("imgProduto").src = produtoAtual.imagem;
-    document.getElementById("nomeProduto").textContent = produtoAtual.nome;
-    document.getElementById("descricaoProduto").textContent = produtoAtual.descricao || "";
-    document.getElementById("precoProduto").textContent = "R$ " + parseFloat(produtoAtual.preco).toFixed(2);
-  } catch(e) {
-    console.error("Erro ao carregar produto:", e);
-  }
-}
+    let taxaEntrega = tipoEntrega === "entrega" ? 2 : 0;
+    const total = carrinho.reduce((s, p) => s + p.preco * p.qtd, 0) + taxaEntrega;
 
-carregarProduto();
+    let msg = `🍧 Pedido ChupChup Cremosão da Barra 🍧%0A`;
+    msg += `👤 Nome: ${usuario.nome || '-'}%0A🏠 Endereço: ${usuario.rua || '-'}, ${usuario.bairro || '-'}%0A📍 Ref: ${usuario.referencia || '-'}%0A%0A`;
+    carrinho.forEach(p => { msg += `${p.qtd}x ${p.nome} — R$ ${(p.qtd*p.preco).toFixed(2)}%0A`; });
+    msg += `%0A💰 Total: R$ ${total.toFixed(2)}%0A🚚 Tipo: ${tipoEntrega}%0A💵 Pagamento: ${pagamento}%0A`;
+    if(pagamento==="dinheiro" && troco) msg += `Troco para: R$ ${parseFloat(troco).toFixed(2)}%0A`;
 
-// Quantidade
-document.getElementById("maisBtn").onclick = () => {
-  const input = document.getElementById("qtdProduto");
-  input.value = parseInt(input.value) + 1;
-};
-document.getElementById("menosBtn").onclick = () => {
-  const input = document.getElementById("qtdProduto");
-  input.value = Math.max(1, parseInt(input.value) - 1);
-};
+    const numero = "5527997765557";
+    const link = `https://api.whatsapp.com/send?phone=${numero}&text=${msg}`;
+    window.open(link, "_blank");
+    popupFinalizar.style.display = "none";
+  };
 
-// Carrinho
-let carrinho = JSON.parse(localStorage.getItem("carrinho")) || [];
-
-document.getElementById("adicionarProduto").onclick = () => {
-  const qtd = parseInt(document.getElementById("qtdProduto").value);
-  const existente = carrinho.find(p => p.id == produtoAtual.id);
-  if(existente) existente.qtd += qtd;
-  else carrinho.push({...produtoAtual, qtd});
-  localStorage.setItem("carrinho", JSON.stringify(carrinho));
-  alert("Produto adicionado ao carrinho!");
-};
+  carregarProdutos();
+});
 </script>
 
 </body>
